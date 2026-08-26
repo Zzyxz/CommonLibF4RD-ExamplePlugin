@@ -178,6 +178,10 @@ On the next launch, the file is overwritten with the IDs requested by this
 plugin, their resolved RVAs, and any selected fixed or automatic offsets.
 Remove or rename the file to disable tracing.
 
+The untouched example does not execute its relocation examples, so its trace
+can contain no ID entries until a validated plugin feature requests a
+relocation.
+
 ### Complete database mapping
 
 ```text
