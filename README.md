@@ -14,7 +14,7 @@ without an exact executable-version whitelist.
 - a valid `F4SEPlugin_Version` export;
 - address- and structure-independence metadata;
 - no hard-coded runtime-version rejection;
-- one-, two-, and three-family `REL::ID` declarations;
+- the one-, two-, and three-ID forms of `REL::ID`;
 - `REL::VariantOffset`;
 - automatic hook callsite discovery;
 - `.trace`, `.mapping`, and `.mapping.fail` diagnostics.
@@ -101,21 +101,38 @@ layout cannot be used safely.
 
 ## Runtime-aware IDs
 
-The argument order is always `OG, NG, AE`:
+The numbers passed to `REL::ID` are Runtime Database IDs. They are not Fallout
+version numbers. Each number identifies the same logical function or object for
+a particular game generation.
+
+| Form | Meaning |
+| --- | --- |
+| `REL::ID(AE)` | One AE ID. NG uses the same ID. OG is resolved automatically only when a verified OG mapping exists. |
+| `REL::ID(OG, AE)` | The first ID is for OG. The second ID is used by both NG and AE. |
+| `REL::ID(OG, NG, AE)` | An explicit ID is supplied for OG, NG, and AE. |
+
+The order never changes:
 
 ```cpp
-// A portable AE ID, after verifying its bridge on every supported family.
-REL::ID(2229323);
+REL::ID(
+    2229323  // AE, and also used by NG
+);
 
-// OG uses its legacy ID; NG and AE use the second ID.
-REL::ID(1546751, 2229323);
+REL::ID(
+    1546751,  // OG
+    2229323   // NG and AE
+);
 
-// Explicit IDs for OG, NG, and AE.
-REL::ID(1546751, 2229323, 2229323);
+REL::ID(
+    1546751,  // OG
+    2229323,  // NG
+    2229323   // AE
+);
 ```
 
-Use the shortest form that has been verified for every runtime supported by the
-plugin. If an implicit bridge is unavailable, supply the explicit family ID.
+Use one ID only after it has been tested on every runtime supported by the
+plugin. If automatic OG or NG resolution is unavailable, use the two- or
+three-ID form and provide the missing ID explicitly.
 
 ## Runtime-aware offsets
 

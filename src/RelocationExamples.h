@@ -2,13 +2,13 @@
 
 namespace RelocationExamples
 {
-	[[nodiscard]] std::uintptr_t ResolvePortableID();
+	[[nodiscard]] std::uintptr_t ResolveOneIDForm();
 
-	[[nodiscard]] std::uintptr_t ResolveDualFamilyID();
+	[[nodiscard]] std::uintptr_t ResolveOGAndSharedNGAEIDs();
 
-	[[nodiscard]] std::uintptr_t ResolveExplicitFamilyIDs();
+	[[nodiscard]] std::uintptr_t ResolveSeparateOGNGAndAEIDs();
 
-	[[nodiscard]] std::uintptr_t ResolveFamilyOffset(
+	[[nodiscard]] std::uintptr_t ResolveSeparateOGNGAndAEOffsets(
 		std::ptrdiff_t a_ogOffset,
 		std::ptrdiff_t a_ngOffset,
 		std::ptrdiff_t a_aeOffset);

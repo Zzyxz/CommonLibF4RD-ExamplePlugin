@@ -2,47 +2,71 @@
 
 namespace
 {
-	// These IDs demonstrate the API and must be replaced with symbols required
-	// by the plugin before the corresponding example function is called.
-	constexpr REL::ID kPortableID{ 2229323 };
-	constexpr REL::ID kDualFamilyID{ 1546751, 2229323 };
-	constexpr REL::ID kExplicitFamilyIDs{ 1546751, 2229323, 2229323 };
+	// Replace these demonstration IDs with IDs for the functions or objects
+	// that the plugin actually uses.
 
-	constexpr REL::ID kCallOwner{ 1546751, 2229323 };
-	constexpr REL::ID kCallTarget{ 881215, 2231148 };
+	// REL::ID(AE): one AE ID. NG uses the same ID. OG works only when the
+	// Runtime Database contains a verified automatic OG mapping for this ID.
+	constexpr REL::ID kOneIDForm{
+		2229323  // AE, and also used by NG
+	};
+
+	// REL::ID(OG, AE): the first ID is for OG. The second is used by NG and AE.
+	constexpr REL::ID kOGAndSharedNGAEIDs{
+		1546751,  // OG
+		2229323   // NG and AE
+	};
+
+	// REL::ID(OG, NG, AE): one explicit ID for every supported game generation.
+	constexpr REL::ID kSeparateOGNGAndAEIDs{
+		1546751,  // OG
+		2229323,  // NG
+		2229323   // AE
+	};
+
+	// AUTO_CALLSITE searches inside kFunctionContainingHookCall for an
+	// instruction that calls kFunctionCalledAtHook.
+	constexpr REL::ID kFunctionContainingHookCall{
+		1546751,  // OG
+		2229323   // NG and AE
+	};
+	constexpr REL::ID kFunctionCalledAtHook{
+		881215,  // OG
+		2231148  // NG and AE
+	};
 }
 
-std::uintptr_t RelocationExamples::ResolvePortableID()
+std::uintptr_t RelocationExamples::ResolveOneIDForm()
 {
 	REL::Relocation<std::uintptr_t> function{
-		kPortableID
+		kOneIDForm
 	};
 	return function.address();
 }
 
-std::uintptr_t RelocationExamples::ResolveDualFamilyID()
+std::uintptr_t RelocationExamples::ResolveOGAndSharedNGAEIDs()
 {
 	REL::Relocation<std::uintptr_t> function{
-		kDualFamilyID
+		kOGAndSharedNGAEIDs
 	};
 	return function.address();
 }
 
-std::uintptr_t RelocationExamples::ResolveExplicitFamilyIDs()
+std::uintptr_t RelocationExamples::ResolveSeparateOGNGAndAEIDs()
 {
 	REL::Relocation<std::uintptr_t> function{
-		kExplicitFamilyIDs
+		kSeparateOGNGAndAEIDs
 	};
 	return function.address();
 }
 
-std::uintptr_t RelocationExamples::ResolveFamilyOffset(
+std::uintptr_t RelocationExamples::ResolveSeparateOGNGAndAEOffsets(
 	std::ptrdiff_t a_ogOffset,
 	std::ptrdiff_t a_ngOffset,
 	std::ptrdiff_t a_aeOffset)
 {
 	REL::Relocation<std::uintptr_t> hookSite{
-		kExplicitFamilyIDs,
+		kSeparateOGNGAndAEIDs,
 		REL::VariantOffset{
 			a_ogOffset,
 			a_ngOffset,
@@ -55,9 +79,9 @@ std::uintptr_t RelocationExamples::ResolveFamilyOffset(
 std::uintptr_t RelocationExamples::ResolveAutomaticCallsite()
 {
 	REL::Relocation<std::uintptr_t> hookSite{
-		kCallOwner,
+		kFunctionContainingHookCall,
 		REL::VariantOffset{
-			REL::AUTO_CALLSITE(kCallTarget)
+			REL::AUTO_CALLSITE(kFunctionCalledAtHook)
 		}
 	};
 	return hookSite.address();
