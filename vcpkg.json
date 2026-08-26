@@ -1,0 +1,14 @@
+{
+  "name": "f4rd-example-plugin",
+  "version-string": "1.0.0",
+  "description": "A ready-to-build F4SE plugin example using CommonLibF4RD",
+  "homepage": "https://github.com/Zzyxz/CommonLibF4RD-ExamplePlugin",
+  "license": "MIT",
+  "dependencies": [
+    "boost-stl-interfaces",
+    "fmt",
+    "rsm-mmio",
+    "spdlog",
+    "zydis"
+  ]
+}
