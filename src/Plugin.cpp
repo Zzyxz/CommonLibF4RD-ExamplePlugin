@@ -26,10 +26,12 @@ namespace
 			data.name[i] = Version::PROJECT[i];
 		}
 
-		// Do not reject a plugin only because the executable has a new patch number.
-		// Required IDs and callsites are resolved and validated by CommonLibF4RD.
+		// Tell F4SE that this plugin uses runtime-resolved IDs instead of fixed
+		// executable addresses. A new patch number alone is not a reason to reject it.
 		data.addressIndependence = F4SE::PluginVersionData::kAddressIndependence_Signatures;
-		// Advertise both layout families only after the plugin has been tested with them.
+
+		// Address selection and C++ class layouts are separate concerns. Advertise
+		// only the layout families that this plugin has actually tested.
 		data.structureIndependence =
 			F4SE::PluginVersionData::kStructureIndependence_1_10_980Layout |
 			F4SE::PluginVersionData::kStructureIndependence_1_11_137Layout;

@@ -2,62 +2,51 @@
 
 namespace
 {
-	// Replace these demonstration IDs with IDs for the functions or objects
-	// that the plugin actually uses.
-
-	// REL::ID(AE): one AE ID. NG uses the same ID. OG works only when the
-	// Runtime Database contains a verified automatic OG mapping for this ID.
-	constexpr REL::ID kOneIDForm{
-		2229323  // AE, and also used by NG
+	// This real example uses Actor::DoHitMe. The IDs are Runtime Database IDs,
+	// not addresses and not Fallout 4 version numbers.
+	constexpr REL::ID kActorDoHitMe{
+		881215,  // Actor::DoHitMe on OG
+		2231148  // Actor::DoHitMe on NG and AE
 	};
 
-	// REL::ID(OG, AE): the first ID is for OG. The second is used by NG and AE.
-	constexpr REL::ID kOGAndSharedNGAEIDs{
-		1546751,  // OG
-		2229323   // NG and AE
-	};
-
-	// REL::ID(OG, NG, AE): one explicit ID for every supported game generation.
-	constexpr REL::ID kSeparateOGNGAndAEIDs{
-		1546751,  // OG
-		2229323,  // NG
-		2229323   // AE
-	};
-
-	// AUTO_CALLSITE searches inside kFunctionContainingHookCall for an
-	// instruction that calls kFunctionCalledAtHook.
-	constexpr REL::ID kFunctionContainingHookCall{
-		1546751,  // OG
-		2229323   // NG and AE
-	};
-	constexpr REL::ID kFunctionCalledAtHook{
-		881215,  // OG
-		2231148  // NG and AE
+	// This is a different function. It contains the particular call to
+	// Actor::DoHitMe that the example wants to replace.
+	constexpr REL::ID kFunctionThatCallsActorDoHitMe{
+		1546751,  // surrounding caller function on OG
+		2229323   // the same logical caller function on NG and AE
 	};
 }
 
 std::uintptr_t RelocationExamples::ResolveOneIDForm()
 {
-	REL::Relocation<std::uintptr_t> function{
-		kOneIDForm
+	// REL::ID(AE)
+	// NG and AE use 2231148 directly. On OG, CommonLibF4RD tries to map this
+	// ID through a verified automatic bridge. It fails instead of guessing
+	// when no safe OG mapping exists.
+	REL::Relocation<std::uintptr_t> actorDoHitMe{
+		REL::ID{ 2231148 }
 	};
-	return function.address();
+	return actorDoHitMe.address();
 }
 
 std::uintptr_t RelocationExamples::ResolveOGAndSharedNGAEIDs()
 {
-	REL::Relocation<std::uintptr_t> function{
-		kOGAndSharedNGAEIDs
+	// REL::ID(OG, AE)
+	// OG uses 881215. NG and AE both use 2231148.
+	REL::Relocation<std::uintptr_t> actorDoHitMe{
+		REL::ID{ 881215, 2231148 }
 	};
-	return function.address();
+	return actorDoHitMe.address();
 }
 
 std::uintptr_t RelocationExamples::ResolveSeparateOGNGAndAEIDs()
 {
-	REL::Relocation<std::uintptr_t> function{
-		kSeparateOGNGAndAEIDs
+	// REL::ID(OG, NG, AE)
+	// This form supplies every runtime-family ID explicitly.
+	REL::Relocation<std::uintptr_t> actorDoHitMe{
+		REL::ID{ 881215, 2231148, 2231148 }
 	};
-	return function.address();
+	return actorDoHitMe.address();
 }
 
 std::uintptr_t RelocationExamples::ResolveSeparateOGNGAndAEOffsets(
@@ -65,8 +54,9 @@ std::uintptr_t RelocationExamples::ResolveSeparateOGNGAndAEOffsets(
 	std::ptrdiff_t a_ngOffset,
 	std::ptrdiff_t a_aeOffset)
 {
+	// VariantOffset uses the same runtime order as REL::ID.
 	REL::Relocation<std::uintptr_t> hookSite{
-		kSeparateOGNGAndAEIDs,
+		kFunctionThatCallsActorDoHitMe,
 		REL::VariantOffset{
 			a_ogOffset,
 			a_ngOffset,
@@ -78,10 +68,15 @@ std::uintptr_t RelocationExamples::ResolveSeparateOGNGAndAEOffsets(
 
 std::uintptr_t RelocationExamples::ResolveAutomaticCallsite()
 {
+	// Goal: replace one specific call to Actor::DoHitMe, not the function
+	// entry and not every Actor::DoHitMe call in the game.
+	//
+	// CommonLibF4RD resolves both functions, searches only inside the caller,
+	// and returns the unique direct call whose destination is Actor::DoHitMe.
 	REL::Relocation<std::uintptr_t> hookSite{
-		kFunctionContainingHookCall,
+		kFunctionThatCallsActorDoHitMe,
 		REL::VariantOffset{
-			REL::AUTO_CALLSITE(kFunctionCalledAtHook)
+			REL::AUTO_CALLSITE(kActorDoHitMe)
 		}
 	};
 	return hookSite.address();

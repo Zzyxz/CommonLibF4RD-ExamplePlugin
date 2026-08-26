@@ -1,39 +1,49 @@
 # CommonLibF4RD Example Plugin
 
-This repository is a complete, minimal F4SE plugin project built with
+This is a complete, buildable F4SE plugin project using
 [CommonLibF4RD](https://github.com/Zzyxz/CommonLibF4RD).
 
-It is intended to be cloned, built, and used as the starting point for a real
-plugin. The generated DLL loads on supported OG, NG, and AE runtime families
-without an exact executable-version whitelist.
+Clone it when starting a new plugin, or compare it with an existing plugin when
+moving to CommonLibF4RD. The same DLL can load on supported OG, NG, and AE
+runtime families without an exact executable-version whitelist.
 
-## What this example demonstrates
+## Runtime names used in this guide
+
+- **OG**: the original Fallout 4 `1.10.163` runtime family
+- **NG**: the Fallout 4 `1.10.984` runtime family
+- **AE**: the Fallout 4 `1.11.x` runtime family
+
+CommonLibF4RD selects IDs and offsets for the active family. Mod authors do not
+need separate OG, NG, and AE DLLs when their code and class-layout assumptions
+support all three families.
+
+## What this example contains
 
 - a standalone CMake and vcpkg project;
 - CommonLibF4RD included as a Git submodule;
-- a valid `F4SEPlugin_Version` export;
-- address- and structure-independence metadata;
-- no hard-coded runtime-version rejection;
-- the one-, two-, and three-ID forms of `REL::ID`;
-- `REL::VariantOffset`;
-- automatic hook callsite discovery;
-- `.trace`, `.mapping`, and `.mapping.fail` diagnostics.
+- the F4SE plugin entry point and version export;
+- metadata for address and structure independence;
+- no hard-coded rejection of unknown patch numbers;
+- simple examples for every `REL::ID` form;
+- simple examples for `REL::VariantOffset`;
+- a concrete `Actor::DoHitMe` automatic-callsite example;
+- opt-in `.trace`, `.mapping`, and `.mapping.fail` diagnostics.
 
-The example plugin only initializes F4SE and writes a log entry. The relocation
-examples are compiled but are not executed and do not install hooks.
+The example DLL only initializes F4SE and writes a log entry. The relocation
+examples compile as reference code, but are not called and do not install hooks.
 
 ## Requirements
 
 - Windows x64
-- Visual Studio 2022 with Desktop development with C++
+- Visual Studio 2022 with **Desktop development with C++**
 - CMake 3.21 or newer
 - vcpkg
-- F4SE matching the game runtime used for testing
+- F4SE matching the Fallout 4 runtime used for testing
 - the CommonLibF4RD Runtime Database for in-game testing
 
 Set `VCPKG_ROOT` to the directory containing your vcpkg installation.
 
-## Clone
+## Clone and build
 
 Clone recursively so the CommonLibF4RD submodule is included:
 
@@ -48,34 +58,110 @@ If the repository was cloned without `--recursive`, initialize the submodule:
 git submodule update --init --recursive
 ```
 
-## Build
+Build a Release DLL:
 
 ```text
 cmake --preset vs2022-windows-vcpkg
 cmake --build --preset vs2022-release
 ```
 
-The Release DLL is written to:
+The result is written to:
 
 ```text
 build/vs2022/Release/F4RDExamplePlugin.dll
 ```
 
-Install it under:
+## Install and run
+
+Install the DLL and Runtime Database like this:
 
 ```text
-Data/F4SE/Plugins/F4RDExamplePlugin.dll
+Data/
+└─ F4SE/
+   └─ Plugins/
+      ├─ F4RDExamplePlugin.dll
+      └─ f4rd-runtime.bin
 ```
 
-The Runtime Database is distributed separately and must be installed as:
+Start Fallout 4 through F4SE. The normal plugin log is written under:
 
 ```text
-Data/F4SE/Plugins/f4rd-runtime.bin
+Documents/My Games/Fallout4/F4SE/F4RDExamplePlugin.log
 ```
+
+## Check your plugin with `.trace`
+
+Create an empty file next to the DLL with the same base name:
+
+```text
+F4RDExamplePlugin.dll
+F4RDExamplePlugin.trace
+```
+
+On the next launch, CommonLibF4RD overwrites the `.trace` file and records only
+the IDs that this plugin actually requests. Each resolved ID includes its RVA.
+A relocation using `VariantOffset` or `AUTO_CALLSITE` also records the selected
+runtime slot, selected offset, final RVA, and whether the offset was fixed or
+found automatically.
+
+This is the normal diagnostic mode for testing a plugin on OG, NG, and AE.
+Delete or rename the `.trace` file to disable it.
+
+The untouched example does not execute its relocation examples, so it may have
+no relocation entries. A real plugin produces entries when its features request
+their IDs.
+
+## Validate the complete database with `.mapping`
+
+Create another empty marker file next to the DLL:
+
+```text
+F4RDExamplePlugin.dll
+F4RDExamplePlugin.mapping
+```
+
+On the next launch, CommonLibF4RD overwrites it with a complete `ID RVA` mapping
+for the currently running Fallout 4 executable. This is different from `.trace`:
+
+| File | What it resolves |
+| --- | --- |
+| `F4RDExamplePlugin.trace` | Only IDs requested by this plugin |
+| `F4RDExamplePlugin.mapping` | Every ID available for the current executable |
+
+If complete mapping finds failures, CommonLibF4RD creates:
+
+```text
+F4RDExamplePlugin.mapping.fail
+```
+
+The failure file lists each unresolved ID and its reason. Full mapping can take
+noticeable time, so use it only for dedicated development or validation runs.
+Do not include `.trace`, `.mapping`, `.mapping.fail`, or PDB files in a normal
+release package.
+
+## One entry point for OG, NG, and AE
+
+`src/main.cpp` uses the normal F4SE entry point:
+
+```cpp
+extern "C" DLLEXPORT bool F4SEAPI F4SEPlugin_Load(
+    const F4SE::LoadInterface* a_f4se)
+{
+    if (!Plugin::Initialize(a_f4se)) {
+        return false;
+    }
+
+    return true;
+}
+```
+
+OG, NG, and AE all enter the plugin through this function. There is no runtime
+switch here. CommonLibF4RD selects the correct IDs and offsets when each
+relocation is constructed.
 
 ## Why the plugin metadata matters
 
-The example exports this metadata in `src/Plugin.cpp`:
+`src/Plugin.cpp` exports:
 
 ```cpp
 data.addressIndependence =
@@ -86,149 +172,249 @@ data.structureIndependence =
     F4SE::PluginVersionData::kStructureIndependence_1_11_137Layout;
 ```
 
-`addressIndependence` tells the F4SE loader that the plugin does not depend on
-one fixed executable address table. CommonLibF4RD resolves requested IDs for the
-running executable.
+`addressIndependence` tells F4SE that the plugin uses relocations instead of
+fixed executable addresses. A new patch number alone should therefore not make
+F4SE reject the plugin.
 
-`structureIndependence` declares which game structure-layout families the
-plugin supports. Only advertise layouts that the plugin has actually been
-tested with. Address resolution cannot make incompatible C++ class layouts
-safe.
+`structureIndependence` is separate. It declares which C++ class-layout
+families the plugin has been tested with. Runtime address resolution cannot make
+an incompatible class layout or function ABI safe. Only advertise layouts that
+the plugin really supports.
 
-Do not add an exact runtime-version check just because a patch number is new.
-Initialization should fail only when a required ID, callsite, interface, or
-layout cannot be used safely.
+Initialization should fail when a required ID, callsite, interface, ABI, or
+layout cannot be used safely, not simply because a patch number is unfamiliar.
 
-## Runtime-aware IDs
+## Understanding `REL::ID`
 
-The numbers passed to `REL::ID` are Runtime Database IDs. They are not Fallout
-version numbers. Each number identifies the same logical function or object for
-a particular game generation.
+A Runtime Database ID is a stable name for a game function or object. It is not
+an address and it is not a Fallout 4 version number. The resolver converts the
+selected ID into the correct RVA for the executable currently running.
 
-| Form | Meaning |
-| --- | --- |
-| `REL::ID(AE)` | One AE ID. NG uses the same ID. OG is resolved automatically only when a verified OG mapping exists. |
-| `REL::ID(OG, AE)` | The first ID is for OG. The second ID is used by both NG and AE. |
-| `REL::ID(OG, NG, AE)` | An explicit ID is supplied for OG, NG, and AE. |
+The examples below use `Actor::DoHitMe`:
 
-The order never changes:
+- OG identifies `Actor::DoHitMe` with ID `881215`.
+- NG and AE identify the same logical function with ID `2231148`.
+
+### One ID: `REL::ID(AE)`
 
 ```cpp
-REL::ID(
-    2229323  // AE, and also used by NG
-);
-
-REL::ID(
-    1546751,  // OG
-    2229323   // NG and AE
-);
-
-REL::ID(
-    1546751,  // OG
-    2229323,  // NG
-    2229323   // AE
-);
-```
-
-Use one ID only after it has been tested on every runtime supported by the
-plugin. If automatic OG or NG resolution is unavailable, use the two- or
-three-ID form and provide the missing ID explicitly.
-
-## Runtime-aware offsets
-
-An ID normally identifies a function. A hook may need a location inside that
-function. `REL::VariantOffset` selects an offset for the active runtime family:
-
-```cpp
-REL::Relocation<std::uintptr_t> hookSite{
-    REL::ID(1546751, 2229323),
-    REL::VariantOffset(ogOffset, ngOffset, aeOffset)
+constexpr REL::ID kActorDoHitMe{
+    2231148
 };
 ```
 
-Two values mean `OG, modern`, with the modern value used by both NG and AE.
-Three values mean `OG, NG, AE`.
+The runtime selection is:
 
-## Automatic callsite discovery
+| Runtime | What happens |
+| --- | --- |
+| OG | CommonLibF4RD tries the Runtime Database's verified automatic OG bridge for AE ID `2231148` |
+| NG | Uses `2231148` directly |
+| AE | Uses `2231148` directly |
 
-Fixed interior offsets can move after an executable update. If a hook targets a
-call from one known function to another, CommonLibF4RD can locate that call:
+This one-ID form can therefore work on all three families. On OG, however, it
+depends on a verified bridge in the Runtime Database. If no safe OG mapping
+exists, resolution fails with `og_bridge_failed`. CommonLibF4RD does not guess.
+
+Use this compact form only after testing every runtime family supported by the
+plugin. To guarantee an explicit OG choice, use the two-ID form.
+
+### Two IDs: `REL::ID(OG, AE)`
 
 ```cpp
-constexpr REL::ID owner{ 1546751, 2229323 };
-constexpr REL::ID target{ 881215, 2231148 };
+constexpr REL::ID kActorDoHitMe{
+    881215,  // OG
+    2231148  // NG and AE
+};
+```
 
+Yes, this form also supports NG:
+
+| Runtime | Selected ID |
+| --- | --- |
+| OG | `881215` |
+| NG | `2231148` |
+| AE | `2231148` |
+
+The first value is always OG. The second value is shared by NG and AE. This is
+the recommended form when OG needs a different ID but NG and AE use the same
+one.
+
+### Three IDs: `REL::ID(OG, NG, AE)`
+
+```cpp
+constexpr REL::ID kActorDoHitMe{
+    881215,  // OG
+    2231148, // NG
+    2231148  // AE
+};
+```
+
+Use this form when all three runtime families need an explicit value. NG and AE
+may have different IDs; they happen to be identical for `Actor::DoHitMe`.
+
+The order is always `OG, NG, AE`.
+
+### Resolve the selected ID
+
+```cpp
+REL::Relocation<std::uintptr_t> actorDoHitMe{
+    kActorDoHitMe
+};
+
+const auto address = actorDoHitMe.address();
+```
+
+The plugin supplies logical IDs. CommonLibF4RD selects the runtime value,
+resolves it, validates it, and caches the result for later requests.
+
+## Understanding `REL::VariantOffset`
+
+An ID normally points to the beginning of a function. A hook may need an
+instruction inside that function. `VariantOffset` selects the correct interior
+offset for the active runtime family.
+
+### One offset for every family
+
+```cpp
+REL::VariantOffset{ 0x8F7 }
+```
+
+OG, NG, and AE all use `0x8F7`.
+
+### Separate OG and modern offsets
+
+```cpp
+REL::VariantOffset{
+    0x921, // OG
+    0x8F7  // NG and AE
+}
+```
+
+The second value is shared by NG and AE.
+
+### One explicit offset per family
+
+```cpp
+REL::VariantOffset{
+    0x921, // OG
+    0x930, // NG
+    0x8F7  // AE
+}
+```
+
+The order is again `OG, NG, AE`.
+
+`VariantOffset` selects a runtime family, not a specific patch number. For
+example, multiple AE patches use the AE slot. Use a fixed interior offset only
+when it has been verified for the entire family. If the wanted instruction is a
+call to another known function, automatic callsite discovery is usually more
+resilient.
+
+## Concrete `AUTO_CALLSITE` example: `Actor::DoHitMe`
+
+Suppose a plugin wants to replace one particular call to `Actor::DoHitMe` but
+must leave all other calls to `Actor::DoHitMe` untouched.
+
+A callsite hook needs two different function IDs:
+
+1. **The caller:** the surrounding function containing the call instruction to
+   replace.
+2. **The target:** `Actor::DoHitMe`, the function that instruction must call.
+
+```cpp
+// The function that contains the particular call we want to replace.
+constexpr REL::ID kFunctionThatCallsActorDoHitMe{
+    1546751, // surrounding caller function on OG
+    2229323  // the same logical caller function on NG and AE
+};
+
+// The function that must be called at the hook location.
+constexpr REL::ID kActorDoHitMe{
+    881215, // Actor::DoHitMe on OG
+    2231148 // Actor::DoHitMe on NG and AE
+};
+```
+
+These ID pairs do not describe the same function. The first pair tells
+CommonLibF4RD where to search. The second pair tells it what call to search for.
+
+```cpp
 REL::Relocation<std::uintptr_t> hookSite{
-    owner,
+    kFunctionThatCallsActorDoHitMe,
     REL::VariantOffset{
-        REL::AUTO_CALLSITE(target)
+        REL::AUTO_CALLSITE(kActorDoHitMe)
     }
 };
 ```
 
-The default form requires one unique call. First, last, and nth selectors are
-also available for functions that intentionally call the target more than once:
+At runtime, CommonLibF4RD:
+
+1. resolves the surrounding caller function for OG, NG, or AE;
+2. resolves `Actor::DoHitMe` for the same runtime;
+3. searches only inside the surrounding caller;
+4. finds a direct call whose destination is `Actor::DoHitMe`;
+5. requires that match to be unique;
+6. returns the address of that call instruction.
+
+The plugin can replace that one call with its hook. It is not hooking the
+`Actor::DoHitMe` function entry, and it is not changing every call to
+`Actor::DoHitMe` in the game.
+
+This is more update-resilient than `caller + fixedOffset` because inserted or
+removed instructions may move the call while the caller-to-target relationship
+remains intact.
+
+### Multiple calls to the same target
+
+The default `AUTO_CALLSITE` form deliberately fails if the caller contains more
+than one matching call. If multiple calls are intentional and have been
+verified, a specific occurrence can be selected:
 
 ```cpp
-REL::AUTO_CALLSITE_FIRST(target);
-REL::AUTO_CALLSITE_LAST(target);
-REL::AUTO_CALLSITE_NTH(target, 2);
+REL::AUTO_CALLSITE_FIRST(kActorDoHitMe);
+REL::AUTO_CALLSITE_LAST(kActorDoHitMe);
+REL::AUTO_CALLSITE_NTH(kActorDoHitMe, 2); // zero-based: the third match
 ```
 
-Always validate the intended call context before writing a hook. Automatic
-discovery makes offsets more resilient; it does not replace ABI validation.
+`FIRST`, `LAST`, and `NTH` are less resilient than a unique match because an
+update may insert or reorder calls. Always verify the selected call context and
+the hook ABI on every supported layout family.
 
-Compilable versions of these examples are in
-`src/RelocationExamples.cpp`. They are deliberately not called by the plugin.
+Compilable versions of all relocation examples are in
+`src/RelocationExamples.cpp`. They are deliberately not called by the example
+plugin.
 
-## Optional diagnostics
+## Safe failure behavior
 
-Create an empty file next to the DLL to enable a diagnostic mode.
+CommonLibF4RD fails instead of returning a guessed address when it cannot safely
+resolve an ID or callsite. Useful failure reasons include:
 
-### Requested IDs only
+- `og_bridge_failed`: a one-ID declaration has no verified OG bridge;
+- `ng_bridge_failed`: an AE ID has no verified resolution for NG;
+- `pattern_not_found`: no valid pattern matched the executable;
+- `pattern_ambiguous`: more than one valid pattern match remained;
+- `callsite_not_found`: the expected caller-to-target call no longer exists;
+- `callsite_ambiguous`: more than one call matched when a unique call was
+  required;
+- `runtime_unavailable`: the known symbol does not exist on this runtime family.
 
-```text
-F4RDExamplePlugin.trace
-```
+Treat a required relocation failure as a reason to disable that feature or stop
+plugin initialization safely.
 
-On the next launch, the file is overwritten with the IDs requested by this
-plugin, their resolved RVAs, and any selected fixed or automatic offsets.
-Remove or rename the file to disable tracing.
-
-The untouched example does not execute its relocation examples, so its trace
-can contain no ID entries until a validated plugin feature requests a
-relocation.
-
-### Complete database mapping
-
-```text
-F4RDExamplePlugin.mapping
-```
-
-On the next launch, the file is overwritten with a complete `ID RVA` mapping
-for the current executable. Entries that cannot be resolved safely are written
-to:
-
-```text
-F4RDExamplePlugin.mapping.fail
-```
-
-Complete mapping is intended for dedicated development and validation runs. It
-can take noticeable time and should not be included in a normal plugin release.
-
-## Turn this into your plugin
+## Turn this example into your plugin
 
 1. Rename `F4RDExamplePlugin` in `CMakeLists.txt`.
-2. Update the version and package metadata.
+2. Update the project version and package metadata.
 3. Rename the C++ namespace if desired.
 4. Replace the demonstration IDs with IDs required by the plugin.
-5. Initialize features only after their required relocations are validated.
-6. Test every supported runtime family with a `.trace` file.
-7. Package the DLL and required assets, but not PDB or diagnostic marker files.
+5. Resolve and validate required relocations before installing hooks.
+6. Test OG, NG, and AE with a matching `.trace` marker.
+7. Use `.mapping` only for dedicated full-database validation.
+8. Package the DLL and required assets, but not PDB or diagnostic marker files.
 
 See the full
 [CommonLibF4RD feature guide](https://github.com/Zzyxz/CommonLibF4RD/blob/main/docs/FEATURES.md)
-for resolver status values, all callsite selectors, and additional examples.
+for resolver statuses, advanced callsite selectors, and migration details.
 
 ## License
 
