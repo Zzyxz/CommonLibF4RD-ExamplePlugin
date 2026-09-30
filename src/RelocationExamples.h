@@ -14,4 +14,8 @@ namespace RelocationExamples
 		std::ptrdiff_t a_aeOffset);
 
 	[[nodiscard]] std::uintptr_t ResolveAutomaticCallsite();
+
+	[[nodiscard]] std::uintptr_t ResolveAutomaticCallsiteWithKnownOffsets();
+
+	[[nodiscard]] std::uintptr_t TryResolveAutomaticCallsite();
 }

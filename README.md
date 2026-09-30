@@ -27,6 +27,9 @@ support all three families.
 - simple examples for every `REL::ID` form;
 - simple examples for `REL::VariantOffset`;
 - a concrete `Actor::DoHitMe` automatic-callsite example;
+- known offsets for calls that another plugin has already hooked (`or_offset`);
+- optional hooks that disable one feature instead of stopping the game
+  (`REL::try_resolve_callsite`);
 - opt-in `.trace`, `.mapping`, and `.mapping.fail` diagnostics.
 
 The example DLL only initializes F4SE and writes a log entry. The relocation
@@ -380,6 +383,90 @@ REL::AUTO_CALLSITE_NTH(kActorDoHitMe, 2); // zero-based: the third match
 update may insert or reorder calls. Always verify the selected call context and
 the hook ABI on every supported layout family.
 
+### Calls already hooked by another plugin: `or_offset`
+
+The automatic search looks for a direct call whose destination is
+`Actor::DoHitMe`. If another plugin has already replaced exactly that call with
+its own hook, for example with `write_call`, the call now goes to that plugin's
+code instead. The search then finds no match, or `FIRST`/`NTH` may silently pick
+a different call.
+
+`or_offset` adds the offset of the call for exact game versions on which it has
+been checked:
+
+```cpp
+REL::Relocation<std::uintptr_t> hookSite{
+    kFunctionThatCallsActorDoHitMe,
+    REL::VariantOffset{
+        // OG slot
+        REL::AUTO_CALLSITE(kActorDoHitMe)
+            .or_offset(0x921, REL::Version{ 1, 10, 163, 0 }),
+        // NG slot
+        REL::AUTO_CALLSITE(kActorDoHitMe)
+            .or_offset(0x8F7, REL::Version{ 1, 10, 984, 0 }),
+        // AE slot: only the checked AE versions
+        REL::AUTO_CALLSITE(kActorDoHitMe)
+            .or_offset(0x8F7, REL::Version{ 1, 11, 221, 0 }, REL::Version{ 1, 11, 240, 0 })
+    }
+};
+```
+
+On a listed version, CommonLibF4RD reads the instruction at that offset first and
+uses it only if it is a call (or a jump, for a jump callsite) that
+
+1. still goes to `Actor::DoHitMe`, or
+2. goes to code outside `Fallout4.exe`, which means another plugin has already
+   redirected this call.
+
+In the second case, `write_call` returns the other plugin's hook as the original
+function. When the new hook calls that original, both hooks run one after the
+other and neither plugin breaks the other.
+
+If the check fails, or the running version is not listed, the normal automatic
+search runs exactly as without `or_offset`. A game update that moves the call is
+therefore never patched at an outdated offset.
+
+Guidelines:
+
+- The offset is relative to the caller, like every other `VariantOffset` value.
+- List only versions on which the offset was checked. Each `or_offset` accepts
+  up to four versions.
+- The plugin log shows an `F4RD NOTE` line when a known offset was used for a
+  call that another plugin had already hooked, including that plugin's DLL
+  name. No marker file is needed for this line.
+
+### Optional hooks: `REL::try_resolve_callsite`
+
+`REL::Relocation` stops the game with an error message when an ID or callsite
+cannot be resolved. That is correct for anything the plugin cannot work without.
+
+For an optional feature, `REL::try_resolve_callsite` returns an empty result
+instead:
+
+```cpp
+const auto lookup = REL::try_resolve_callsite(
+    kFunctionThatCallsActorDoHitMe,
+    REL::VariantOffset{
+        REL::AUTO_CALLSITE(kActorDoHitMe)
+    });
+
+if (!lookup) {
+    logger::warn(
+        "optional Actor::DoHitMe hook disabled: {} {}",
+        REL::id_resolve_status_text(lookup.resolution.status),
+        lookup.resolution.note);
+    return;  // skip only this hook
+}
+
+const auto hookSite = *lookup.address;
+```
+
+`lookup.resolution.status` is the short reason, for example
+`callsite_not_found`. `lookup.resolution.note` adds details when available, for
+example why a known offset from `or_offset` was rejected. It accepts the same
+`VariantOffset` values as `REL::Relocation`, including `AUTO_CALLSITE` with
+`or_offset`.
+
 Compilable versions of all relocation examples are in
 `src/RelocationExamples.cpp`. They are deliberately not called by the example
 plugin.
@@ -399,7 +486,8 @@ resolve an ID or callsite. Useful failure reasons include:
 - `runtime_unavailable`: the known symbol does not exist on this runtime family.
 
 Treat a required relocation failure as a reason to disable that feature or stop
-plugin initialization safely.
+plugin initialization safely. For optional hooks, `REL::try_resolve_callsite`
+returns these reasons instead of stopping the game.
 
 ## Turn this example into your plugin
 
